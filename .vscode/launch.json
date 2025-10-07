@@ -1,0 +1,43 @@
+{
+    // 使用 IntelliSense 了解相关属性。 
+    // 悬停以查看现有属性的描述。
+    // 欲了解更多信息，请访问: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+
+        {
+            "name": "DM_cf_cos",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "/home/xmwang/ImagebindDC/main_DM_AV_imagebind_cf_cos.py",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "DM",
+            "type": "debugpy",
+            "request": "launch",
+            "env": {
+                "CUDA_VISIBLE_DEVICES": "6"
+            },
+            "program": "/home/xmwang/ImagebindDC/main_DM_AV_imagebind_cf_cos.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--dataset","AVE"
+            ]
+        },
+        {
+            "name": "DM_AVDD",
+            "type": "debugpy",
+            "request": "launch",
+            "env": {
+                "CUDA_VISIBLE_DEVICES": "5"
+            },
+            "program": "AVDD/main_DM_AV.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--idm_aug"
+            ]
+        },
+
+    ]
+}
