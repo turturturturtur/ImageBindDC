@@ -152,6 +152,9 @@ def main(args):
                 # 如果音频数据是4D的，需要添加一个维度
                 if idx_aud.dim() == 4:
                     idx_aud = idx_aud.unsqueeze(2)
+                if idx_aud.dim() == 3:
+                    idx_aud = idx_aud.unsqueeze(1)
+                    idx_aud = idx_aud.unsqueeze(1)
             if args.input_modality == 'v' or args.input_modality == 'av':
                 idx_img = dst_train[idx_shuffle]['frame'].to(args.device)
             return idx_aud, idx_img
@@ -216,8 +219,8 @@ def main(args):
         for it in tqdm(range(args.Iteration+1)):
 
             if it in eval_it_pool:
-                if it == 0:
-                    continue
+                # if it == 0:
+                #     continue
                 ''' Evaluate synthetic data '''
                 aud_syn_eval, image_syn_eval = None, None
                 if args.input_modality == 'a' or args.input_modality == 'av':

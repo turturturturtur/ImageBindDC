@@ -17,12 +17,13 @@
             "type": "debugpy",
             "request": "launch",
             "env": {
-                "CUDA_VISIBLE_DEVICES": "6"
+                "CUDA_VISIBLE_DEVICES": "1"
             },
             "program": "/home/xmwang/ImagebindDC/main_DM_AV_imagebind_cf_cos.py",
             "console": "integratedTerminal",
             "args": [
-                "--dataset","AVE"
+                // "--dataset","AVE",
+                "--Iteration","1"
             ]
         },
         {
@@ -35,7 +36,8 @@
             "program": "AVDD/main_DM_AV.py",
             "console": "integratedTerminal",
             "args": [
-                "--idm_aug"
+                "--idm_aug",
+
             ]
         },
 

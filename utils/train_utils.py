@@ -361,7 +361,7 @@ class NetWrapperimagebind(torch.nn.Module):
         else:
             raise ValueError("Both audio and frame are None")
 
-        pred = self.net_classifier(feat)
+        pred = self.net_classifier(feat_sound,feat_frame)
         return pred
 
     def get_embds(self, audio, frame):
