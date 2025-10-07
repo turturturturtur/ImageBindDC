@@ -134,6 +134,9 @@ def main(args):
                     # 如果音频数据是4D的，需要添加一个维度
                     if idx_aud.dim() == 4:
                         idx_aud = idx_aud.unsqueeze(2)
+                    if idx_aud.dim() == 3:
+                        idx_aud = idx_aud.unsqueeze(1)
+                        idx_aud = idx_aud.unsqueeze(1)
 
                 if args.input_modality == 'v' or args.input_modality == 'av':
                     idx_img = dst_train[idx_shuffle]['frame'].to(args.device)
