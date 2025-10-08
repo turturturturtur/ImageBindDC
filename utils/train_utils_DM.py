@@ -96,6 +96,7 @@ def evaluate(netWrapper, loader, args):
 
             if args.arch_classifier == 'ensemble':
                 out_a, out_v = netWrapper.forward(audio, frame)
+                gt = gt.long()
                 err = criterion(out_a, gt) + criterion(out_v, gt)
                 preds = (F.softmax(out_a, dim=1) + F.softmax(out_v, dim=1)) / 2
             else:

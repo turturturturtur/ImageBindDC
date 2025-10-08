@@ -50,7 +50,7 @@ def get_train_dataset_origin(dataset, args):
         im_channel = 3
         channel = [aud_channel, im_channel]
 
-        aud_size = (128, 204)
+        aud_size = (128, 56)
         im_size = (224, 224)
         im_size = [aud_size, im_size]
 
@@ -523,7 +523,7 @@ def get_class_train_dataset(dataset, class_num, args):
         im_channel = 3
         channel = [aud_channel, im_channel]
 
-        aud_size = (128, 56)
+        aud_size = (128, 204)
         im_size = (224, 224)
         im_size = [aud_size, im_size]
         

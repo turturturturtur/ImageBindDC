@@ -22,8 +22,11 @@
             "program": "/home/xmwang/ImagebindDC/main_DM_AV_imagebind_cf_cos.py",
             "console": "integratedTerminal",
             "args": [
-                // "--dataset","AVE",
-                "--Iteration","1"
+                //"--dataset","AVE",
+                "--Iteration","30",
+                "--interval","1",
+                "--num_eval","1",
+                //"--idm_aug"
             ]
         },
         {
@@ -38,6 +41,24 @@
             "args": [
                 "--idm_aug",
 
+            ]
+        },
+        {
+            "name": "rebuttal",
+            "type": "debugpy",
+            "request": "launch",
+            "env": {
+                "CUDA_VISIBLE_DEVICES": "2"
+            },
+            "program": "/home/xmwang/ImagebindDC/main_DM_AV_imagebind_cf_cos_random_noise.py",
+            "console": "integratedTerminal",
+            "args": [
+                //"--idm_aug",
+                //"--dataset","AVE",
+                "--Iteration","30",
+                "--interval","1",
+                "--num_eval","3",
+                "--noise_embedding","0.01"
             ]
         },
 

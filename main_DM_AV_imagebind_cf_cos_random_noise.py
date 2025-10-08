@@ -390,8 +390,9 @@ def main(args):
                 embeddings_syn = imagebind_embd(inputs_syn)
                 embd_img_syn, embd_aud_syn = embeddings_syn[ModalityType.VISION], embeddings_syn[ModalityType.AUDIO]
                 
-                
-                    
+                # REBUTTAL 
+                embd_aud_real = embd_aud_real + torch.randn_like(embd_aud_real) * args.noise_embedding
+                embd_img_real = embd_img_real + torch.randn_like(embd_img_real) * args.noise_embedding
 
                 ## Embedding matching
                 if args.input_modality == 'av':
@@ -501,7 +502,8 @@ if __name__ == '__main__':
     parser.add_argument('--beta_for_loss', default=0.5, type=float)
     parser.add_argument('--num_freqs',default=4090, type=int)
     
-    ### CF arguments
+    ### REBUTTAL setting
+    parser.add_argument('--noise_embedding', type=float, default=0.0, help='std of gaussian noise added to the embedding of real data')
     
 
     args = parser.parse_args()
