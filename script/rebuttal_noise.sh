@@ -13,41 +13,41 @@ mkdir -p logs
 gpus=(1 2 3)
 gpu_idx=0
 
-# 固定 ipc=1, 改变 noise_embedding
-for noise in 0.01 0.5 0.2; do
-    gpu=${gpus[$gpu_idx]}
-    log_file="logs/AVE_ipc1_noise${noise}.log"
-    echo "Running on GPU $gpu with ipc=1, noise_embedding=$noise -> $log_file"
-    CUDA_VISIBLE_DEVICES=$gpu python main_DM_AV_imagebind_cf_cos_random_noise.py \
-        --dataset AVE \
-        --Iteration 30 \
-        --noise_embedding $noise \
-        --num_eval 3 \
-        --interval 1 \
-        --ipc 1 \
-        > "$log_file" 2>&1 &
-    gpu_idx=$(( (gpu_idx + 1) % ${#gpus[@]} ))
-done
+# # 固定 ipc=1, 改变 noise_embedding
+# for noise in 0.01 0.5 0.2; do
+#     gpu=${gpus[$gpu_idx]}
+#     log_file="logs/AVE_ipc1_noise${noise}.log"
+#     echo "Running on GPU $gpu with ipc=1, noise_embedding=$noise -> $log_file"
+#     CUDA_VISIBLE_DEVICES=$gpu python main_DM_AV_imagebind_cf_cos_random_noise.py \
+#         --dataset AVE \
+#         --Iteration 30 \
+#         --noise_embedding $noise \
+#         --num_eval 3 \
+#         --interval 1 \
+#         --ipc 1 \
+#         > "$log_file" 2>&1 &
+#     gpu_idx=$(( (gpu_idx + 1) % ${#gpus[@]} ))
+# done
 
-wait
+# wait
 
-# 固定 ipc=1, 改变 noise_embedding
-for noise in 0.01 0.5 0.2; do
-    gpu=${gpus[$gpu_idx]}
-    log_file="logs/VGG_ipc1_noise${noise}.log"
-    echo "Running on GPU $gpu with ipc=1, noise_embedding=$noise -> $log_file"
-    CUDA_VISIBLE_DEVICES=$gpu python main_DM_AV_imagebind_cf_cos_random_noise.py \
-        --dataset VGG_subset \
-        --Iteration 30 \
-        --noise_embedding $noise \
-        --num_eval 3 \
-        --interval 1 \
-        --ipc 1 \
-        > "$log_file" 2>&1 &
-    gpu_idx=$(( (gpu_idx + 1) % ${#gpus[@]} ))
-done
+# # 固定 ipc=1, 改变 noise_embedding
+# for noise in 0.01 0.5 0.2; do
+#     gpu=${gpus[$gpu_idx]}
+#     log_file="logs/VGG_ipc1_noise${noise}.log"
+#     echo "Running on GPU $gpu with ipc=1, noise_embedding=$noise -> $log_file"
+#     CUDA_VISIBLE_DEVICES=$gpu python main_DM_AV_imagebind_cf_cos_random_noise.py \
+#         --dataset VGG_subset \
+#         --Iteration 30 \
+#         --noise_embedding $noise \
+#         --num_eval 3 \
+#         --interval 1 \
+#         --ipc 1 \
+#         > "$log_file" 2>&1 &
+#     gpu_idx=$(( (gpu_idx + 1) % ${#gpus[@]} ))
+# done
 
-wait
+# wait
 # 固定 noise_embedding=0.1, 改变 ipc
 for ipc in 1 10 20; do
     gpu=${gpus[$gpu_idx]}

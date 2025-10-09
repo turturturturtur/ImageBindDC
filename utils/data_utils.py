@@ -602,16 +602,51 @@ class  CombTensorDataset(Dataset):
         self.args = args
 
     def __getitem__(self, index):
-        audio, frame = torch.zeros(1), torch.zeros(1)
-        if hasattr(index, "item"):
-            index = int(index)
-        label = self.labels[index]
-        if self.args.input_modality == 'a' or self.args.input_modality == 'av':
-            audio = self.audio[index]
-        if self.args.input_modality == 'v' or self.args.input_modality == 'av':
-            frame = self.images[index] 
-        ret_dict = {'frame': frame, 'audio': audio, 'label':label}
-        return ret_dict
+        import torch
+
+        # -------- 规范化 index --------
+        if isinstance(index, (list, tuple)):
+            idxs = [int(i) for i in index]
+        elif hasattr(index, "shape") and getattr(index, "ndim", 0) > 0:
+            try:
+                idxs = [int(i) for i in index.tolist()]
+            except Exception:
+                idxs = [int(i) for i in index]
+        elif hasattr(index, "item"):
+            idxs = [int(index.item())]
+        else:
+            idxs = [int(index)]
+
+        # -------- 单样本情况 --------
+        if len(idxs) == 1:
+            i = idxs[0]
+            audio = self.audio[i] if self.args.input_modality in ('a', 'av') else torch.zeros(1)
+            frame = self.images[i] if self.args.input_modality in ('v', 'av') else torch.zeros(1)
+            label = self.labels[i]
+            return {'frame': frame, 'audio': audio, 'label': label}
+
+        # -------- 批量情况 --------
+        audios, frames, labels = [], [], []
+        for i in idxs:
+            i = int(i)
+            labels.append(self.labels[i])
+            audios.append(self.audio[i] if self.args.input_modality in ('a', 'av') else torch.zeros(1))
+            frames.append(self.images[i] if self.args.input_modality in ('v', 'av') else torch.zeros(1))
+
+        # -------- 只尝试 stack，不 pad --------
+        def strict_stack(t_list, name):
+            if not isinstance(t_list[0], torch.Tensor):
+                raise TypeError(f"{name} 不是 Tensor 列表：{type(t_list[0])}")
+            try:
+                return torch.stack(t_list, dim=0)
+            except Exception as e:
+                raise RuntimeError(f"{name} 无法 stack，shape 不一致或维度不匹配：{[t.shape for t in t_list]}，错误：{e}")
+
+        batch_audio = strict_stack(audios, "audio")
+        batch_frame = strict_stack(frames, "frame")
+        batch_label = torch.tensor(labels, dtype=torch.long)
+
+        return {'frame': batch_frame, 'audio': batch_audio, 'label': batch_label}
 
     def __len__(self):
         return self.labels.shape[0]

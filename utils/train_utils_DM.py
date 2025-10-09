@@ -169,7 +169,8 @@ def evaluate_synset_av(nets, net_eval, auds_train, images_train, labels_train, t
     trainloader = torch.utils.data.DataLoader(dst_train, batch_size=args.batch_syn, shuffle=True, num_workers=0)
 
     for e in range(args.epoch_eval_train):
-        train(net_eval, trainloader, optimizer, args)
+        train_loss, train_acc = train(net_eval, trainloader, optimizer, args)
+        # print('Eval training epoch %d, loss %.4f, acc %.2f%%' % (e, train_loss, train_acc))
         if e in args.lr_steps:
             adjust_learning_rate(optimizer, args)
 

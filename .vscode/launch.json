@@ -44,7 +44,7 @@
             ]
         },
         {
-            "name": "rebuttal",
+            "name": "rebuttal noise",
             "type": "debugpy",
             "request": "launch",
             "env": {
@@ -55,10 +55,32 @@
             "args": [
                 //"--idm_aug",
                 //"--dataset","AVE",
-                "--Iteration","30",
+                "--Iteration","1",
+                "--interval","1",
+                "--num_eval","1",
+                "--noise_embedding","0.01",
+                "--ipc","10",
+                "--idm_aug"
+            ]
+        },
+        {
+            "name": "rebuttal modality dropout",
+            "type": "debugpy",
+            "request": "launch",
+            "env": {
+                "CUDA_VISIBLE_DEVICES": "0"
+            },
+            "program": "/home/xmwang/ImagebindDC/main_DM_AV_imagebind_cf_cos_modality_dropout.py",
+            "console": "integratedTerminal",
+            "args": [
+                //"--idm_aug",
+                "--dataset","AVE",
+                "--Iteration","1",
                 "--interval","1",
                 "--num_eval","3",
-                "--noise_embedding","0.01"
+                //"--noise_embedding","0.01",
+                "--remove_audio",
+
             ]
         },
 

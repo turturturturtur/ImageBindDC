@@ -390,9 +390,8 @@ def main(args):
                 embeddings_syn = imagebind_embd(inputs_syn)
                 embd_img_syn, embd_aud_syn = embeddings_syn[ModalityType.VISION], embeddings_syn[ModalityType.AUDIO]
                 
-                # REBUTTAL 
-                embd_aud_real = embd_aud_real + torch.randn_like(embd_aud_real) * args.noise_embedding
-                embd_img_real = embd_img_real + torch.randn_like(embd_img_real) * args.noise_embedding
+                
+                    
 
                 ## Embedding matching
                 if args.input_modality == 'av':
@@ -426,6 +425,15 @@ def main(args):
                         tqdm.write(f"  Loss ICM     (weighted): {loss_icm_weighted.item():.6f} (weight: {args.lam_icm})")
                         tqdm.write(f"  Loss CGM     (weighted): {loss_cgm_weighted.item():.6f} (weight: {args.lam_cgm})")
                         tqdm.write(f"--------------------------")
+                    
+                    if args.remove_audio or args.remove_image:
+                        loss_icm_weighted = torch.tensor(0.0).to(args.device)
+                        loss_cgm_weighted = torch.tensor(0.0).to(args.device)
+                        if args.remove_audio:
+                            loss_base_weighted = args.lam_base * loss_base_vis
+                        if args.remove_image:
+                            loss_base_weighted = args.lam_base * loss_base_aud
+                    
                     # 将所有加权后的损失相加
                     loss_c += loss_base_weighted + loss_icm_weighted + loss_cgm_weighted
 
@@ -469,7 +477,7 @@ if __name__ == '__main__':
     parser.add_argument('--lr_syn_img', type=float, default=0.1, help='learning rate for updating synthetic image')
     parser.add_argument('--lam_base', type=float, default=1.0, help='weight for base distribution matching loss (CF Loss)')
     #evaluation parameters
-    parser.add_argument('--epoch_eval_train', type=int, default=10, help='epochs to train a model with synthetic data')
+    parser.add_argument('--epoch_eval_train', type=int, default=30, help='epochs to train a model with synthetic data')
     parser.add_argument('--interval', type=int, default=1000, help='interval to evaluate the synthetic data')
     parser.add_argument('--num_eval', type=int, default=5, help='the number of evaluating randomly initialized models')
 
@@ -502,9 +510,10 @@ if __name__ == '__main__':
     parser.add_argument('--beta_for_loss', default=0.5, type=float)
     parser.add_argument('--num_freqs',default=4090, type=int)
     
-    ### REBUTTAL setting
-    parser.add_argument('--noise_embedding', type=float, default=0.0, help='std of gaussian noise added to the embedding of real data')
-    
+    ### REBUTTAL SETTING
+    parser.add_argument('--remove_audio', action='store_true', help='remove audio modality')
+    parser.add_argument('--remove_image', action='store_true', help='remove image modality')
+
 
     args = parser.parse_args()
     args.dsa_param = ParamDiffAug()
