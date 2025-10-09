@@ -1,0 +1,20 @@
+# configs/imagebind.yaml
+model:
+  name: imagebind
+  params:
+    # 🔹 Vision 模态
+    vision_embed_dim: 1280
+    vision_num_blocks: 32
+    vision_num_heads: 16
+
+    # 🔹 Text 模态
+    text_embed_dim: 1024
+    text_num_blocks: 24
+    text_num_heads: 16
+
+    # 🔹 输出维度
+    out_embed_dim: 1024
+
+    # 🔹 Drop Path 超参
+    audio_drop_path: 0.1
+    imu_drop_path: 0.7

@@ -1,0 +1,27 @@
+# Clash 相关忽略规则
+data/
+clash/
+# 忽略 data 目录下所有文件（包括子目录中的文件）
+data/**/*
+
+# 但保留 data/ 本身和其直接子目录的结构
+!data/
+!data/*/
+logs/
+*.log
+*.pem
+*.crt
+*.key
+
+# 操作系统/编辑器文件
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 通用忽略
+node_modules/
+.env
+*.tmp
