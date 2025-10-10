@@ -1,11 +1,11 @@
-import torch
-import torch.nn as nn
-from registry import LOSS
 
-@LOSS.register("cf_cos_loss")
-class cf_cos_loss(nn.Module):
-    def __init__(self, **kwargs):
-        super(cf_cos_loss, self).__init__()
-        self.lam_base = kwargs.get("lam_base", 1.0)
-        self.lam_icm = kwargs.get("lam_icm", 10.0)
-        self.lam_cgm = kwargs.get("lam_cgm", 10.0)
+import os
+import importlib
+
+# 自动扫描当前目录下的所有 .py 文件并导入
+# 这样可以确保所有文件中定义的模型都被注册
+for file in os.listdir(os.path.dirname(__file__)):
+    if file.endswith('.py') and not file.startswith('__'):
+        module_name = file[:file.rfind('.')]
+        # 使用 importlib 动态导入模块
+        importlib.import_module(f'.{module_name}', __package__)

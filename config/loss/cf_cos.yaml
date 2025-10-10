@@ -3,3 +3,8 @@ params:
   lam_base: 1.0
   lam_icm: 10.0
   lam_cgm: 10.0
+
+  # for CFLossFunc
+  alpha_for_loss: 0.5
+  beta_for_loss: 0.5
+  num_freqs: 4090

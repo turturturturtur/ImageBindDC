@@ -1,18 +1,17 @@
 import yaml
 import model
+import dataset
+import loss
 import argparse
 import torch
 import torch.nn as nn
 from factory import create_model, create_dataset, create_loss
-from utils import read_cfg, set_seeds, get_img_transform, get_syn_data
-from dataset import AVEBuilder, dataset_mapping
+from utils import read_cfg, set_seeds, get_img_transform, get_syn_data, Trainer, get_syn_optimizer
 from torchvision.transforms import v2
 from tqdm import tqdm
 
-def train_syn_data(model_teacher, dst_train, dst_syn, exp_cfg):
-    pass
 
-
+    
 
 def main(args):
     # 读取实验配置
@@ -28,26 +27,51 @@ def main(args):
     # 创建数据集
     dataset = create_dataset(exp_cfg.get("dataset"))
     dst_train = dataset.build(mode='train', transform=img_transform)
+    dst_syn = dataset.build(mode='train', transform=img_transform)
     dst_test = dataset.build(mode='test')
-    dst_syn = get_syn_data(dst_train=dst_train, ipc=exp_cfg.get("ipc"))
+    dst_syn = get_syn_data(dst_train=dst_train, dst_syn_container=dst_syn,ipc=exp_cfg.get("ipc"))
 
     # 创建模型
     model_cfg["params"]['extra_params']["num_classes"] = dst_train.num_classes
     model_teacher = create_model(model_cfg.get("name"),**model_cfg.get("params")).to('cuda')
-    if torch.cuda.device_count() > 1:
-        model_teacher = nn.DataParallel(model_teacher)
+    model_student = create_model(model_cfg.get("name"),**model_cfg.get("params")).to('cuda')
+
 
     # 创建损失函数
-    criterion = create_loss(exp_cfg.get("loss"),**exp_cfg.get("params"))
+    criterion = create_loss(exp_cfg.get("loss"))
 
-    # single test
-    #
+    # 创建优化器
+    optimizer = get_syn_optimizer(dst_syn, dataset.input_modality, exp_cfg)
+
+    # 创建dataloader
+    train_loader = torch.utils.data.DataLoader(dst_train, batch_size=exp_cfg.get("batch_size", 16), shuffle=True, pin_memory=True)
+    syn_loader = torch.utils.data.DataLoader(dst_syn, batch_size=exp_cfg.get("batch_size", 16), shuffle=True, pin_memory=True)
+    test_loader = torch.utils.data.DataLoader(dst_test, batch_size=exp_cfg.get("batch_size", 16), shuffle=False, pin_memory=True)
+
+    trainer = Trainer(
+        model=model_teacher,       
+        optimizer=optimizer,
+        loss_fn=criterion,
+        train_loader=syn_loader,     
+        val_loader=test_loader,  
+        synthetic_dataset=dst_syn,   
+        epochs=exp_cfg.get("epochs"),
+        val_train_epochs=exp_cfg.get("epoch_eval_train", 5),
+    )
+
+    trainer.train()
+
+    # # single test
+    
     # batch_size = 4 
     # inputs = {
     #     "audio": dst_train[:batch_size]["audio"],
     #     "image": dst_train[:batch_size]["frame"],
     # }
-    # model_teacher.forward(inputs)
+    # feature = model_teacher.forward(inputs, mode="embeddings")
+    # embed_audio = feature["audio"]
+    # embed_image = feature["vision"]
+    # loss_value = criterion(embed_audio, embed_audio, embed_image, embed_image)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
