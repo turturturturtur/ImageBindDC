@@ -9,7 +9,7 @@
 import os
 from functools import partial
 from types import SimpleNamespace
-
+from typing import Optional
 import torch
 import torch.nn as nn
 
@@ -24,6 +24,7 @@ from .multimodal_preprocessors import (AudioPreprocessor,
                                              ThermalPreprocessor)
 from .transformer import MultiheadAttention, SimpleTransformer
 from registry import MODEL
+import torch.nn.functional as F
 
 
 ModalityType = SimpleNamespace(
@@ -35,7 +36,9 @@ ModalityType = SimpleNamespace(
     IMU="imu",
 )
 
-@MODEL.register("imagebind")
+
+
+
 class ImageBindModel(nn.Module):
     def __init__(
         self,
@@ -506,6 +509,73 @@ class ImageBindModel(nn.Module):
                 outputs[modality_key] = modality_value
 
         return outputs
+
+def audio_padding(audio):
+    h, w = audio.shape[-2], audio.shape[-1]
+    if h != w:
+        # --- 开始替换 F.interpolate 逻辑 ---
+        TARGET_WIDTH = 204
+        
+        if w < TARGET_WIDTH:
+            # 如果当前宽度小于目标宽度，则在右侧填充
+            padding_needed = TARGET_WIDTH - w
+            audio = F.pad(audio, (0, padding_needed), "constant", 0)
+        elif w > TARGET_WIDTH:
+            # 如果当前宽度大于目标宽度，则从右侧截断
+            audio = audio[..., :TARGET_WIDTH]
+        else:
+            # 如果宽度正好等于目标宽度，则无需操作
+            audio = audio
+    return audio
+
+@MODEL.register("imagebind")
+class ImageBindClassifer(ImageBindModel):
+    def __init__(self,**kwargs):
+        extra_params = kwargs.pop('extra_params', None)
+        super(ImageBindClassifer, self).__init__(**kwargs)
+        self.classifier_audio = nn.Linear(extra_params.get("input_dim"), extra_params.get("num_classes"))
+        self.classifier_image = nn.Linear(extra_params.get("input_dim"), extra_params.get("num_classes"))
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    
+
+    def forward(self, inputs, mode: Optional[str] = None):
+        '''
+        直接输入dst_train形式的inputs,返回分类结果
+        '''
+        # 自动获取模型当前设备
+        device = next(self.parameters()).device
+        
+        audio = inputs["audio"].to(device)
+        image = inputs["image"].to(device)
+
+        # 填充audio
+        audio = audio_padding(audio)
+
+        inputs = {
+            ModalityType.VISION: image,
+            ModalityType.AUDIO: audio,
+        }
+        features = super(ImageBindClassifer, self).forward(inputs)
+        
+        # 如果需要embeddings就直接返回
+        if mode == "embeddings":
+            return features
+        
+        # 分解模态feature准备送入classifier
+        if ModalityType.VISION in features:
+            feature_image = features[ModalityType.VISION]
+            logits_image = self.classifier_image(feature_image)
+        if ModalityType.AUDIO in features:
+            feature_audio = features[ModalityType.AUDIO]
+            logits_audio = self.classifier_audio(feature_audio)
+        else:
+            raise ValueError("No valid modality found for classification.")
+
+        if mode == "logits":
+            return logits_image, logits_audio
+
+        pred = (F.softmax(logits_audio, dim=1) + F.softmax(logits_image, dim=1)) / 2
+        return pred
 
 
 def imagebind_huge(pretrained=False):
