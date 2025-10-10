@@ -1,7 +1,7 @@
 # experiment_config.yaml
 
 # Training parameters
-dataset: "VGG_subset"
+dataset: "AVE"
 ipc: 1
 epochs: 30
 num_exp: 3

@@ -85,7 +85,8 @@ class Trainer:
     def _train_one_epoch(self, epoch: int) -> float:
         """
         执行单轮训练。
-        【已为你定制，以适应数据蒸馏任务】
+        【最终正确版本】
+        本方法接收一个被打乱的数据加载器，并在内部重建“按类别”匹配的逻辑。
         """
         self.model.train() # 设置为训练模式
         total_loss = 0.0
@@ -93,33 +94,55 @@ class Trainer:
         # 使用 self.train_loader (它将被设置成 syn_loader)
         progress_bar = tqdm(self.train_loader, desc=f"Epoch {epoch}/{self.epochs} [Training on Synthetic Data]")
         for batch in progress_bar:
-            # 1. 将你的多模态数据移动到设备
-            inputs = {
-                "audio": batch['audio'].to(self.device),
-                "image": batch['frame'].to(self.device) 
-            }
-            # 注意：对于你的InfoNCE Loss，我们可能不需要标签 (targets)
             
-            # 2. 清零梯度
+            # --- 【核心修改开始】 ---
+
+            # 1. 获取整个批次的数据和标签
+            syn_aud_batch = batch['audio'].to(self.device)
+            syn_img_batch = batch['frame'].to(self.device)
+            labels_batch = batch['label'].to(self.device)
+
+            # 2. 我们将在每个类别上累积梯度，最后一起更新
             self.optimizer.zero_grad()
             
-            # 3. 前向传播 (使用你模型特定的 forward 方法)
-            features = self.model.forward(inputs, mode="embeddings")
-            embed_audio = features["audio"]
-            embed_image = features["vision"]
+            # 3. 按类别对批次数据进行“解复用” (Demultiplexing)
+            #    找出当前批次中出现了哪些类别
+            unique_classes_in_batch = torch.unique(labels_batch)
             
-            # 4. 计算损失 (使用你特定的损失函数)
-            #    这模仿了你注释掉的 single test 部分
-            loss = self.loss_fn(embed_audio, embed_audio, embed_image, embed_image)
+            batch_total_loss = 0.0
+
+            # 4. 为每个类别独立计算损失并累积梯度
+            for c in unique_classes_in_batch:
+                # 4.1. 筛选出当前批次中所有属于类别 c 的合成数据
+                class_mask = (labels_batch == c)
+                curr_aud_syn = syn_aud_batch[class_mask]
+                curr_img_syn = syn_img_batch[class_mask]
+
+                # 4.2. 前向传播 (只对当前类别的数据)
+                inputs = {"audio": curr_aud_syn, "image": curr_img_syn}
+                features = self.model.forward(inputs, mode="embeddings")
+                embed_audio = features["audio"]
+                embed_image = features["vision"]
+                
+                # 4.3. 计算类别 c 的内部对比损失
+                loss_c = self.loss_fn(embed_audio, embed_audio, embed_image, embed_image)
+                
+                # 4.4. 反向传播以【累积】梯度
+                #      为了防止样本数多的类别主导梯度，我们将损失按类别数进行平均
+                loss_c_avg = loss_c / len(unique_classes_in_batch)
+                loss_c_avg.backward()
+
+                batch_total_loss += loss_c.item() # 记录原始损失大小
             
-            # 5. 反向传播
-            loss.backward()
-            
-            # 6. 更新权重
+            # 5. 在处理完批次中所有类别的梯度累积后，执行一次优化器步骤
+            #    这将使用累积的梯度，同时更新批次中所有被计算过的合成数据
             self.optimizer.step()
             
-            total_loss += loss.item()
-            progress_bar.set_postfix(loss=loss.item())
+            # 6. 更新总损失和进度条
+            total_loss += batch_total_loss
+            progress_bar.set_postfix(batch_loss=batch_total_loss / len(unique_classes_in_batch))
+            
+            # --- 【核心修改结束】 ---
             
         avg_loss = total_loss / len(self.train_loader)
         logging.info(f"Epoch {epoch} Training Summary: Average Loss: {avg_loss:.4f}")

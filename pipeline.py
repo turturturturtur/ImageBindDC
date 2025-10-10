@@ -11,8 +11,6 @@ from torchvision.transforms import v2
 from tqdm import tqdm
 
 
-    
-
 def main(args):
     # 读取实验配置
     exp_cfg = read_cfg(args.exp_config)
@@ -29,7 +27,7 @@ def main(args):
     dst_train = dataset.build(mode='train', transform=img_transform)
     dst_syn = dataset.build(mode='train', transform=img_transform)
     dst_test = dataset.build(mode='test')
-    dst_syn = get_syn_data(dst_train=dst_train, dst_syn_container=dst_syn,ipc=exp_cfg.get("ipc"))
+    dst_syn = get_syn_data(dst_train=dst_train, dst_syn_container=dst_syn,ipc=exp_cfg.get("ipc"), mode='augmentation')
 
     # 创建模型
     model_cfg["params"]['extra_params']["num_classes"] = dst_train.num_classes
@@ -60,18 +58,6 @@ def main(args):
     )
 
     trainer.train()
-
-    # # single test
-    
-    # batch_size = 4 
-    # inputs = {
-    #     "audio": dst_train[:batch_size]["audio"],
-    #     "image": dst_train[:batch_size]["frame"],
-    # }
-    # feature = model_teacher.forward(inputs, mode="embeddings")
-    # embed_audio = feature["audio"]
-    # embed_image = feature["vision"]
-    # loss_value = criterion(embed_audio, embed_audio, embed_image, embed_image)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

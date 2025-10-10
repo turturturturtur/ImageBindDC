@@ -533,6 +533,32 @@ class ImageBindClassifer(ImageBindModel):
     def __init__(self,**kwargs):
         extra_params = kwargs.pop('extra_params', None)
         super(ImageBindClassifer, self).__init__(**kwargs)
+
+        # 定义权重文件的路径
+        pretrained_path = "data/checkpoint/imagebind_huge.pth"
+        
+        # 检查权重文件是否存在，如果不存在则自动下载
+        if not os.path.exists(pretrained_path):
+            print(f"ImageBind weights not found at '{pretrained_path}'. Downloading...")
+            
+            # 确保 checkpoint 目录存在
+            checkpoint_dir = os.path.dirname(pretrained_path)
+            os.makedirs(checkpoint_dir, exist_ok=True)
+            
+            # 从官方 URL 下载文件
+            torch.hub.download_url_to_file(
+                "https://dl.fbaipublicfiles.com/imagebind/imagebind_huge.pth",
+                pretrained_path,
+                progress=True,
+            )
+        
+        # 加载预训练权重到模型中
+        print(f"Loading pretrained ImageBind weights from: {pretrained_path}")
+        # 使用 strict=False 允许我们只加载父类 ImageBindModel 的权重，
+        # 而忽略我们自己新加的 classifier 层的权重（因为它们在 .pth 文件中不存在）。
+        self.load_state_dict(torch.load(pretrained_path, map_location='cpu'), strict=False)
+        print("Pretrained weights loaded successfully.")
+
         self.classifier_audio = nn.Linear(extra_params.get("input_dim"), extra_params.get("num_classes"))
         self.classifier_image = nn.Linear(extra_params.get("input_dim"), extra_params.get("num_classes"))
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
