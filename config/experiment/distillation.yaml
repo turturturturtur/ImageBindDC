@@ -5,6 +5,7 @@ dataset: "VGG_subset"
 ipc: 1
 Iteration: 30
 num_exp: 3
+img_aug: false
 
 lam_cgm: 10.0          # weight for cross-modal gap matching loss
 lam_icm: 10.0          # weight for implicit cross matching loss

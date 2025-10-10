@@ -1,9 +1,10 @@
 import torch
 from torch.utils.data import Dataset
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Callable
 from registry import DATASET  # 假设 DATASETS 是一个 Registry 实例
 from base import BaseDataset # 假设你有一个 BaseDataset 抽象基类
 from utils import read_cfg   # 假设你有一个读取 yaml 的函数
+from tqdm import tqdm
 
 # ==============================================================================
 # 1. 定义标准的 PyTorch Dataset 类
@@ -20,7 +21,8 @@ class AVEDataset(Dataset):
     def __init__(self, 
                  labels: torch.Tensor,
                  audio_data: Optional[torch.Tensor] = None, 
-                 image_data: Optional[torch.Tensor] = None):
+                 image_data: Optional[torch.Tensor] = None,
+                 num_classes:  Optional[int] = None):
         """
         初始化数据集。
 
@@ -35,6 +37,7 @@ class AVEDataset(Dataset):
         self.labels = labels
         self.audio = audio_data
         self.images = image_data
+        self.num_classes = num_classes
 
         # 安全性检查：确保至少有一种模态的数据存在
         if self.audio is None and self.images is None:
@@ -105,13 +108,14 @@ class AVEBuilder(BaseDataset):
         self.im_tag = self.cfg.get('im_tag')
         self.label_tag = self.cfg.get('label_tag')
 
-    def build(self, mode: str = 'train') -> AVEDataset:
+    def build(self, mode: str = 'train', transform: Callable=None) -> AVEDataset:
         """
         构建并返回一个 AVEDataset 实例。
         这个方法会执行实际的数据加载（I/O 操作）。
 
         Args:
             mode (str): 'train' 或 'test'，决定加载哪个数据集。
+            transform (Callable, optional): 可选的数据变换函数。
 
         Returns:
             AVEDataset: 一个配置好的、包含数据的 AVEDataset 实例。
@@ -151,11 +155,30 @@ class AVEBuilder(BaseDataset):
             for c in range(self.im_channel):
                 final_image_data[:, c] = (final_image_data[:, c] - self.mean[c]) / self.std[c]
 
+        if transform and mode=='train' and final_image_data is not None:
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            # 1. 将整个数据集移动到 GPU
+            print(f"Moving {len(image_data)} images to {device} for augmentation...")
+            image_data_gpu = image_data.to(device)
+            
+            # 2. 在 GPU 上对整个批次直接应用变换，无需 Python 循环！
+            #    为了防止 GPU 内存溢出，可以分批处理
+            batch_size = 256 # 根据你的 GPU 显存调整
+            augmented_batches = []
+            for i in tqdm(range(0, len(image_data_gpu), batch_size), desc="Augmenting on GPU"):
+                batch = image_data_gpu[i:i+batch_size]
+                augmented_batch = transform(batch)
+                augmented_batches.append(augmented_batch.cpu()) # 处理完移回 CPU
+            
+            final_image_data = torch.cat(augmented_batches, dim=0)
+            print("Augmentation complete.")
+
         # 5. 创建并返回最终的 AVEDataset 实例
         dataset_instance = AVEDataset(
             labels=labels_data.detach(),
             audio_data=final_audio_data,
-            image_data=final_image_data
+            image_data=final_image_data,
+            num_classes=self.cfg.get("num_classes"),
         )
 
         # print(f"Successfully built '{mode}' dataset with {len(dataset_instance)} samples.")
