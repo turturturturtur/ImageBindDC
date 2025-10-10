@@ -1,0 +1,20 @@
+train_data_path: "data/train_data/vgg_subset_train.pt"
+test_data_path: "data/test_data/vgg_subset_test.pt"
+input_modality: "av"
+
+# ImageNet statistics
+mean: [0.425, 0.396, 0.370]
+std: [0.229, 0.224, 0.221]
+num_classes: 10
+
+# Audio specifications
+aud_channel: 1
+aud_size: [128, 56]
+im_channel: 3
+im_size: [224, 224]
+
+# Lable specifications
+aud_tag: "audio_train"
+im_tag: "images_train"
+label_tag: "labels_train"
+

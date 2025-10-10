@@ -1,0 +1,42 @@
+# experiment_config.yaml
+
+# Training parameters
+dataset: "VGG_subset"
+ipc: 1
+Iteration: 30
+num_exp: 3
+
+lam_cgm: 10.0          # weight for cross-modal gap matching loss
+lam_icm: 10.0          # weight for implicit cross matching loss
+lr_syn_aud: 0.1        # learning rate for updating synthetic audio specs
+lr_syn_img: 0.1        # learning rate for updating synthetic image
+lam_base: 1.0          # weight for base distribution matching loss (CF Loss)
+
+# Evaluation parameters
+epoch_eval_train: 10   # epochs to train a model with synthetic data
+interval: 1            # interval to evaluate the synthetic data
+num_eval: 1            # number of evaluating randomly initialized models
+
+
+
+# Optimizer settings
+lr_frame: 1e-4         # learning rate for frame encoder
+lr_sound: 1e-3         # learning rate for sound encoder
+lr_classifier: 1e-3    # learning rate for classifier
+beta1: 0.9             # beta1 for Adam
+weight_decay: 1e-4     # weight decay (note: originally mislabeled as "classifier learning rate")
+batch_syn: 32          # batch size for synthetic data
+num_workers: 4         # number of workers for dataloader
+
+# Data parameters
+input_modality: "av"   # a / v / av
+idm_aug_count: 2       # number of images per image during IDM
+idm_aug: false         # whether to use augmentation
+wandb_disable: true    # if true, disables wandb (note: action='store_false' in argparse)
+batch_real: 128        # batch size for real data
+dsa_strategy: "color_crop_cutout_flip_scale_rotate"  # differentiable Siamese augmentation
+
+base_syn_data_dir: "data/syn_data_train"
+alpha_for_loss: 0.5
+beta_for_loss: 0.5
+num_freqs: 4090
