@@ -55,6 +55,7 @@ def main(args):
         synthetic_dataset=dst_syn,   
         epochs=exp_cfg.get("epochs"),
         val_train_epochs=exp_cfg.get("epoch_eval_train", 5),
+        augment_transform=img_transform,
     )
 
     trainer.train()

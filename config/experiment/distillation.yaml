@@ -1,11 +1,11 @@
 # experiment_config.yaml
 
 # Training parameters
-dataset: "AVE"
+dataset: "VGG_subset"
 ipc: 1
 epochs: 30
 num_exp: 3
-img_aug: true
+img_aug: false
 loss: "cf_cos_loss"
 batch_size: 32
 

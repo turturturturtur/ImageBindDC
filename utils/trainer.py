@@ -5,7 +5,7 @@ from tqdm import tqdm
 import os
 import logging
 from torch.utils.data import Dataset
-from typing import Optional
+from typing import Optional, Callable
 from copy import deepcopy
 
 # 配置一个简单的日志
@@ -26,7 +26,8 @@ class Trainer:
                  device: str = 'cuda',
                  epochs: int = 100,
                  val_train_epochs: int = 5,
-                 checkpoint_dir: str = 'output/checkpoints'):
+                 checkpoint_dir: str = 'output/checkpoints',
+                 augment_transform: Optional[Callable] = None):
         """
         初始化 Trainer。
 
@@ -52,6 +53,7 @@ class Trainer:
         self.epochs = epochs
         self.checkpoint_dir = checkpoint_dir
         self.val_train_epochs = val_train_epochs
+        self.augment_transform = augment_transform
         
         self.best_val_acc = 0.0
         os.makedirs(self.checkpoint_dir, exist_ok=True)
@@ -97,51 +99,34 @@ class Trainer:
             
             # --- 【核心修改开始】 ---
 
-            # 1. 获取整个批次的数据和标签
+            # 1. 获取整个批次的数据
             syn_aud_batch = batch['audio'].to(self.device)
             syn_img_batch = batch['frame'].to(self.device)
-            labels_batch = batch['label'].to(self.device)
+            # labels_batch 在这个逻辑下可能不再需要，但保留无妨
 
-            # 2. 我们将在每个类别上累积梯度，最后一起更新
+            # 2. 清零梯度
             self.optimizer.zero_grad()
             
-            # 3. 按类别对批次数据进行“解复用” (Demultiplexing)
-            #    找出当前批次中出现了哪些类别
-            unique_classes_in_batch = torch.unique(labels_batch)
+            # 3. 前向传播 (对整个混合批次)
+            inputs = {"audio": syn_aud_batch, "image": syn_img_batch}
+            features = self.model.forward(inputs, mode="embeddings")
+            embed_audio = features["audio"]
+            embed_image = features["vision"]
             
-            batch_total_loss = 0.0
-
-            # 4. 为每个类别独立计算损失并累积梯度
-            for c in unique_classes_in_batch:
-                # 4.1. 筛选出当前批次中所有属于类别 c 的合成数据
-                class_mask = (labels_batch == c)
-                curr_aud_syn = syn_aud_batch[class_mask]
-                curr_img_syn = syn_img_batch[class_mask]
-
-                # 4.2. 前向传播 (只对当前类别的数据)
-                inputs = {"audio": curr_aud_syn, "image": curr_img_syn}
-                features = self.model.forward(inputs, mode="embeddings")
-                embed_audio = features["audio"]
-                embed_image = features["vision"]
-                
-                # 4.3. 计算类别 c 的内部对比损失
-                loss_c = self.loss_fn(embed_audio, embed_audio, embed_image, embed_image)
-                
-                # 4.4. 反向传播以【累积】梯度
-                #      为了防止样本数多的类别主导梯度，我们将损失按类别数进行平均
-                loss_c_avg = loss_c / len(unique_classes_in_batch)
-                loss_c_avg.backward()
-
-                batch_total_loss += loss_c.item() # 记录原始损失大小
+            # 4. 计算整个批次的“类间”对比损失
+            #    注意：loss_fn 现在看到的是一个混合了所有类别样本的嵌入批次
+            loss = self.loss_fn(embed_audio, embed_audio, embed_image, embed_image)
             
-            # 5. 在处理完批次中所有类别的梯度累积后，执行一次优化器步骤
-            #    这将使用累积的梯度，同时更新批次中所有被计算过的合成数据
+            # 5. 反向传播
+            loss.backward()
+
+            # 6. 更新权重
             self.optimizer.step()
             
-            # 6. 更新总损失和进度条
-            total_loss += batch_total_loss
-            progress_bar.set_postfix(batch_loss=batch_total_loss / len(unique_classes_in_batch))
-            
+            # 7. 更新总损失和进度条
+            total_loss += loss.item()
+            progress_bar.set_postfix(loss=loss.item())
+
             # --- 【核心修改结束】 ---
             
         avg_loss = total_loss / len(self.train_loader)
@@ -217,12 +202,21 @@ class Trainer:
         student_model.train() # 将学生模型设为训练模式
         for inner_epoch in range(self.val_train_epochs):
             for batch in inner_train_loader:
-                inputs = { "audio": batch['audio'].to(self.device), "image": batch['frame'].to(self.device) }
+                # 从 batch 中获取干净的合成数据
+                syn_aud_batch = batch['audio'].to(self.device)
+                syn_img_batch = batch['frame'].to(self.device)
                 labels = batch['label'].to(self.device)
 
+                # 在送入学生模型前，进行实时数据增强
+                if self.augment_transform:
+                    syn_img_batch = self.augment_transform(syn_img_batch)
+                    # 你也可以为音频做增强
+                
+                inputs = { "audio": syn_aud_batch, "image": syn_img_batch }
+                
                 optimizer_student.zero_grad()
                 
-                # 直接调用模型的 forward 方法，它会返回最终的预测概率
+                # 使用增强后的数据进行训练
                 predictions = student_model.forward(inputs)
                 
                 loss = loss_fn_student(predictions, labels)
