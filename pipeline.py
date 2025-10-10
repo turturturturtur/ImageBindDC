@@ -27,7 +27,7 @@ def main(args):
     dst_train = dataset.build(mode='train', transform=img_transform)
     dst_syn = dataset.build(mode='train', transform=img_transform)
     dst_test = dataset.build(mode='test')
-    dst_syn = get_syn_data(dst_train=dst_train, dst_syn_container=dst_syn,ipc=exp_cfg.get("ipc"), mode='augmentation')
+    dst_syn = get_syn_data(dst_train=dst_train, dst_syn_container=dst_syn,ipc=exp_cfg.get("ipc"), mode='normal')
 
     # 创建模型
     model_cfg["params"]['extra_params']["num_classes"] = dst_train.num_classes

@@ -5,7 +5,7 @@ dataset: "AVE"
 ipc: 1
 epochs: 30
 num_exp: 3
-img_aug: false
+img_aug: true
 loss: "cf_cos_loss"
 batch_size: 32
 
