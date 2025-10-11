@@ -1,0 +1,6 @@
+# configs/clip.yaml
+name: clip
+
+params:
+  extra_params:
+    input_dim: 512

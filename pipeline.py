@@ -34,7 +34,6 @@ def main(args):
     model_teacher = create_model(model_cfg.get("name"),**model_cfg.get("params")).to('cuda')
     model_student = create_model(model_cfg.get("name"),**model_cfg.get("params")).to('cuda')
 
-
     # 创建损失函数
     criterion = create_loss(exp_cfg.get("loss"))
 

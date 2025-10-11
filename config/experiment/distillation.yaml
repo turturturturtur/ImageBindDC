@@ -6,14 +6,14 @@ ipc: 1
 epochs: 30
 num_exp: 3
 img_aug: false
-loss: "dsdm_loss"
+loss: "cf_cos_loss"
 batch_size: 32
 
 lam_cgm: 10.0          # weight for cross-modal gap matching loss
 lam_icm: 10.0          # weight for implicit cross matching loss
 lr_syn_aud: 0.1        # learning rate for updating synthetic audio specs
 lr_syn_img: 0.1        # learning rate for updating synthetic image
-soft_label: false    # whether to use soft labels
+soft_label: false      # whether to use soft labels
 lr_syn_label: 0.1      # learning rate for updating synthetic labels (if soft labels are used)
 lam_base: 1.0          # weight for base distribution matching loss (CF Loss)
 
