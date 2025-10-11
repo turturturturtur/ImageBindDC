@@ -6,7 +6,7 @@ ipc: 1
 epochs: 30
 num_exp: 3
 img_aug: false
-loss: "cf_cos_loss"
+loss: "dsdm_loss"
 batch_size: 32
 
 lam_cgm: 10.0          # weight for cross-modal gap matching loss

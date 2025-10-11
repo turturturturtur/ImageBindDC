@@ -1,0 +1,25 @@
+# -----------------------------------------------------------------------------
+# Configuration for FeatureDistributionLoss
+# -----------------------------------------------------------------------------
+# This loss function is used for dataset condensation. It aligns the feature
+# distributions of synthetic data with real data by matching their statistical
+# properties (mean and covariance).
+# -----------------------------------------------------------------------------
+
+name: "dsdm_loss"
+
+params:
+  # The distance metric used for comparing features.
+  # Common choices: 'mse' (Mean Squared Error), 'l1' (L1 norm), 'cos' (Cosine Similarity).
+  # 'mse' is the default used in the original implementation.
+  metric: "mse"
+
+  # Weight for the semantic loss component (covariance matching).
+  # This parameter controls the importance of matching the shape of the feature distribution.
+  # A higher value enforces a stricter match on the feature covariance.
+  cov_weight: 1.0
+
+  # Weight for the historical prototype smoothing loss.
+  # This component helps stabilize the training by penalizing large deviations
+  # from a smoothed historical average of the synthetic feature prototypes.
+  h_p_weight: 0.5
