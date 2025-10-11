@@ -22,6 +22,9 @@ class Trainer:
                  train_loader: DataLoader,
                  val_loader: DataLoader,
                  synthetic_dataset: Dataset,
+                 real_dataset: Dataset,
+                 real_sampler: Callable,
+                 real_batch_size: int,
                  lr_scheduler: Optional[torch.optim.lr_scheduler._LRScheduler] = None,
                  device: str = 'cuda',
                  epochs: int = 100,
@@ -47,13 +50,16 @@ class Trainer:
         self.loss_fn = loss_fn
         self.train_loader = train_loader
         self.val_loader = val_loader
-        self.synthetic_dataset = synthetic_dataset
         self.lr_scheduler = lr_scheduler
         self.device = device
         self.epochs = epochs
         self.checkpoint_dir = checkpoint_dir
         self.val_train_epochs = val_train_epochs
         self.augment_transform = augment_transform
+        self.synthetic_dataset = synthetic_dataset
+        self.real_dataset = real_dataset
+        self.real_sampler = real_sampler
+        self.real_batch_size = real_batch_size
         
         self.best_val_acc = 0.0
         os.makedirs(self.checkpoint_dir, exist_ok=True)
@@ -87,48 +93,80 @@ class Trainer:
     def _train_one_epoch(self, epoch: int) -> float:
         """
         执行单轮训练。
-        【最终正确版本】
-        本方法接收一个被打乱的数据加载器，并在内部重建“按类别”匹配的逻辑。
+        【最终修正版】
+        本方法在 DataLoader 提供的合成数据批次基础上，
+        实时采样【形状和类别分布都匹配】的真实数据来计算损失。
         """
-        self.model.train() # 设置为训练模式
         total_loss = 0.0
         
-        # 使用 self.train_loader (它将被设置成 syn_loader)
         progress_bar = tqdm(self.train_loader, desc=f"Epoch {epoch}/{self.epochs} [Training on Synthetic Data]")
         for batch in progress_bar:
             
-            # --- 【核心修改开始】 ---
-
-            # 1. 获取整个批次的数据
+            # 1. 获取合成数据批次及其标签
             syn_aud_batch = batch['audio'].to(self.device)
             syn_img_batch = batch['frame'].to(self.device)
-            # labels_batch 在这个逻辑下可能不再需要，但保留无妨
+            labels_batch = batch['label'].to(self.device)
 
-            # 2. 清零梯度
+            # 2. 【核心修正】: 根据合成批次的类别分布，采样【等量】的真实数据
+            
+            # 找出当前批次中有哪些类别，以及每个类别有多少样本
+            unique_classes, counts = torch.unique(labels_batch, return_counts=True)
+            
+            list_real_aud_per_class = []
+            list_real_img_per_class = []
+            
+            for c, num_samples in zip(unique_classes, counts):
+                # 为类别 c，采样 num_samples 个真实样本
+                real_indices = self.real_sampler.sample(c.item(), num_samples.item())
+                if not real_indices: continue
+
+                real_data_c = self.real_dataset[real_indices]
+                list_real_aud_per_class.append(real_data_c['audio'])
+                list_real_img_per_class.append(real_data_c['frame'])
+
+            if not list_real_aud_per_class or not list_real_img_per_class:
+                continue
+                
+            # 将所有采样到的真实数据拼接成一个批次。
+            # 注意：此时 aud_real_batch 是按类别排序的
+            aud_real_batch_sorted = torch.cat(list_real_aud_per_class, dim=0).to(self.device)
+            img_real_batch_sorted = torch.cat(list_real_img_per_class, dim=0).to(self.device)
+
+            # --- 为了让损失函数能公平比较，我们需要将 syn_batch 也按类别排序 ---
+            # 这样，排序后的 syn_batch 和 real_batch 就完全对齐了
+            sorting_indices = torch.argsort(labels_batch)
+            syn_aud_batch_sorted = syn_aud_batch[sorting_indices]
+            syn_img_batch_sorted = syn_img_batch[sorting_indices]
+
+            # 调整维度
+            if aud_real_batch_sorted.dim()==4:
+                aud_real_batch_sorted = aud_real_batch_sorted.unsqueeze(1)
+
+            # 3. 清零梯度
             self.optimizer.zero_grad()
             
-            # 3. 前向传播 (对整个混合批次)
-            inputs = {"audio": syn_aud_batch, "image": syn_img_batch}
-            features = self.model.forward(inputs, mode="embeddings")
-            embed_audio = features["audio"]
-            embed_image = features["vision"]
-            
-            # 4. 计算整个批次的“类间”对比损失
-            #    注意：loss_fn 现在看到的是一个混合了所有类别样本的嵌入批次
-            loss = self.loss_fn(embed_audio, embed_audio, embed_image, embed_image)
-            
-            # 5. 反向传播
-            loss.backward()
+            # 4. 前向传播 (对排序后、对齐的数据)
+            inputs_syn = {"audio": syn_aud_batch_sorted, "image": syn_img_batch_sorted}
+            features_syn = self.model.forward(inputs_syn, mode="embeddings")
+            embd_aud_syn = features_syn["audio"]
+            embd_img_syn = features_syn["vision"]
 
-            # 6. 更新权重
+            inputs_real = {"audio": aud_real_batch_sorted, "image": img_real_batch_sorted}
+            features_real = self.model.forward(inputs_real, mode="embeddings")
+            embd_aud_real = features_real["audio"].detach()
+            embd_img_real = features_real["vision"].detach()
+            
+            # 5. 计算损失 (现在输入的 Tensor 形状和类别分布都已对齐)
+            loss = self.loss_fn(embd_aud_real, embd_aud_syn, embd_img_real, embd_img_syn)
+            
+            # 6. 反向传播和优化
+            loss.backward()
             self.optimizer.step()
             
-            # 7. 更新总损失和进度条
+            # 7. 更新统计
             total_loss += loss.item()
             progress_bar.set_postfix(loss=loss.item())
 
-            # --- 【核心修改结束】 ---
-            
         avg_loss = total_loss / len(self.train_loader)
         logging.info(f"Epoch {epoch} Training Summary: Average Loss: {avg_loss:.4f}")
         return avg_loss
