@@ -15,12 +15,11 @@ IPCS=(1 5 10)
 DROPOUT_RATES=(0.01 0.05 0.1 1)
 MODALITIES=("audio" "image")
 
-# CUDA 设备 ID 列表（会循环使用）
-CUDA_IDS=(0 1 2 3)
-
+# CUDA 设备 ID 列表（0~7）
+CUDA_IDS=(0 1 2 3 4 5 6 7)
 num_gpus=${#CUDA_IDS[@]}
 
-echo "Start running dropout experiments (one task per GPU). Start time: $(date)"
+echo "Start running dropout experiments with 8 GPUs. Start time: $(date)"
 
 for DATASET in "${DATASETS[@]}"; do
     for IPC in "${IPCS[@]}"; do
@@ -31,41 +30,41 @@ for DATASET in "${DATASETS[@]}"; do
         # 拷贝原始 YAML 文件（覆盖同名文件）
         cp "$ORIGINAL_YAML" "$NEW_YAML"
 
-        # 在新的 YAML 文件中替换 dataset 和 ipc 的值
+        # 替换 dataset 和 ipc 的值
         sed -i.bak "s/^dataset:.*$/dataset: \"$DATASET\"/" "$NEW_YAML"
         sed -i.bak "s/^ipc:.*$/ipc: $IPC/" "$NEW_YAML"
         rm -f "$NEW_YAML.bak"
 
         echo "Prepared YAML for dataset=${DATASET}, ipc=${IPC}: $NEW_YAML"
 
-        # outer loop 改为 modality：先固定 modality，再并行启动若干（等于 GPU 数量）dropout 任务
-        for modality in "${MODALITIES[@]}"; do
-            echo "  Running modality=${modality} for dataset=${DATASET}, ipc=${IPC} at $(date)"
+        # 任务计数器，用于 GPU round-robin
+        task_idx=0
 
-            # 启动与 GPU 数相同数量的并行任务（这里 DROPOUT_RATES 长度为 4，num_gpus 也为 4）
-            # 确保索引和 GPU 一一对应，保证每个 GPU 只跑 1 个任务
-            for idx in "${!DROPOUT_RATES[@]}"; do
-                dropout=${DROPOUT_RATES[$idx]}
-                gpu_idx=$(( idx % num_gpus ))
+        # 遍历 dropout rates 和 modalities，一起跑
+        for dropout in "${DROPOUT_RATES[@]}"; do
+            for modality in "${MODALITIES[@]}"; do
+
+                # 分配 GPU
+                gpu_idx=$(( task_idx % num_gpus ))
                 GPU="${CUDA_IDS[$gpu_idx]}"
 
                 LOG_FILE="$LOG_DIR/dropout_${DATASET}_ipc${IPC}_rate${dropout}_mod${modality}.log"
 
-                echo "    Launching dropout=${dropout} -> GPU ${GPU}, log=${LOG_FILE}"
+                echo "  Launching: dataset=${DATASET}, ipc=${IPC}, dropout=${dropout}, modality=${modality}, GPU=${GPU}"
                 CUDA_VISIBLE_DEVICES=${GPU} \
                     python pipeline_dropout.py \
                         --exp_config "$NEW_YAML" \
                         --dropout_rate "${dropout}" \
                         --dropout_modality "${modality}" \
                     > "${LOG_FILE}" 2>&1 &
-            done
 
-            # 等待本 modality 的所有并行任务完成（保证每个 GPU 在下一 batch 前只有 1 个任务）
-            wait
-            echo "  Completed modality=${modality} for dataset=${DATASET}, ipc=${IPC} at $(date)"
+                task_idx=$((task_idx + 1))
+            done
         done
 
-        echo "Finished dataset=${DATASET}, ipc=${IPC} at $(date)"
+        # 等待本组所有 8 个任务完成，再进入下一个 ipc 或 dataset
+        wait
+        echo "Completed all tasks for dataset=${DATASET}, ipc=${IPC} at $(date)"
     done
 done
 
