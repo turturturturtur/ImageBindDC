@@ -61,6 +61,7 @@ class Trainer:
         self.real_dataset = real_dataset
         self.real_sampler = real_sampler
         self.real_batch_size = real_batch_size
+        self.noise_level = noise_level
         
         self.best_val_acc = 0.0
         os.makedirs(self.checkpoint_dir, exist_ok=True)
