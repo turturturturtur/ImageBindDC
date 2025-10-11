@@ -30,6 +30,7 @@ class Trainer:
                  epochs: int = 100,
                  val_train_epochs: int = 5,
                  checkpoint_dir: str = 'output/checkpoints',
+                 mismatch_rate: float = 0.0,
                  noise_level: float = 0.0,
                  augment_transform: Optional[Callable] = None):
         """
@@ -62,6 +63,7 @@ class Trainer:
         self.real_sampler = real_sampler
         self.real_batch_size = real_batch_size
         self.noise_level = noise_level
+        self.mismatch_rate = mismatch_rate
         
         self.best_val_acc = 0.0
         os.makedirs(self.checkpoint_dir, exist_ok=True)
@@ -151,7 +153,15 @@ class Trainer:
                 noise_img = torch.randn_like(img_real_batch_sorted) * self.noise_level
                 aud_real_batch_sorted = aud_real_batch_sorted + noise_aud
                 img_real_batch_sorted = img_real_batch_sorted + noise_img
-
+            
+            # REBUTTAL: 添加模态不匹配
+            if self.mismatch_rate > 0.0:
+                batch_size = aud_real_batch_sorted.size(0)
+                num_mismatch = int(batch_size * self.mismatch_rate)
+                if num_mismatch > 0:
+                    mismatch_indices = torch.randperm(batch_size)[:num_mismatch]
+                    # 只调整音频模态，以实现百分比的错位
+                    aud_real_batch_sorted[mismatch_indices] = torch.roll(aud_real_batch_sorted[mismatch_indices], shifts=1, dims=0)
 
             # 3. 清零梯度
             self.optimizer.zero_grad()
