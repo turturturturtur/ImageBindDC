@@ -6,7 +6,7 @@ import argparse
 import torch
 import torch.nn as nn
 from factory import create_model, create_dataset, create_loss
-from utils import read_cfg, set_seeds, get_img_transform, get_syn_data, Trainer, get_syn_optimizer
+from utils import read_cfg, set_seeds, get_img_transform, get_syn_data, Trainer, get_syn_optimizer, ClassSampler
 from torchvision.transforms import v2
 from tqdm import tqdm
 
@@ -46,6 +46,10 @@ def main(args):
     syn_loader = torch.utils.data.DataLoader(dst_syn, batch_size=exp_cfg.get("batch_size", 16), shuffle=True, pin_memory=True)
     test_loader = torch.utils.data.DataLoader(dst_test, batch_size=exp_cfg.get("batch_size", 16), shuffle=False, pin_memory=True)
 
+    # 创建真实数据采样器
+    real_data_sampler = ClassSampler(dataset=dst_train)
+
+    # 创建训练器
     trainer = Trainer(
         model=model_teacher,       
         optimizer=optimizer,
@@ -53,6 +57,9 @@ def main(args):
         train_loader=syn_loader,     
         val_loader=test_loader,  
         synthetic_dataset=dst_syn,   
+        real_dataset=dst_train,
+        real_batch_size=exp_cfg.get("batch_real", 128),
+        real_sampler=real_data_sampler,
         epochs=exp_cfg.get("epochs"),
         val_train_epochs=exp_cfg.get("epoch_eval_train", 5),
         augment_transform=img_transform,
@@ -64,8 +71,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--exp_config", type=str, default="config/experiment/distillation.yaml")
     parser.add_argument("--model_config", type=str, default="config/model/imagebind.yaml")
+    parser.add_argument("--noise_level", type=float, default=0.0)
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--noise_lec", type=float, default=0.1)
     args = parser.parse_args()
     main(args)
 

@@ -30,6 +30,7 @@ class Trainer:
                  epochs: int = 100,
                  val_train_epochs: int = 5,
                  checkpoint_dir: str = 'output/checkpoints',
+                 noise_level: float = 0.0,
                  augment_transform: Optional[Callable] = None):
         """
         初始化 Trainer。
@@ -141,6 +142,15 @@ class Trainer:
             # 调整维度
             if aud_real_batch_sorted.dim()==4:
                 aud_real_batch_sorted = aud_real_batch_sorted.unsqueeze(1)
+
+
+            # REBUTTAL：添加噪声
+            if self.noise_level > 0.0:
+                noise_aud = torch.randn_like(aud_real_batch_sorted) * self.noise_level
+                noise_img = torch.randn_like(img_real_batch_sorted) * self.noise_level
+                aud_real_batch_sorted = aud_real_batch_sorted + noise_aud
+                img_real_batch_sorted = img_real_batch_sorted + noise_img
+
 
             # 3. 清零梯度
             self.optimizer.zero_grad()
