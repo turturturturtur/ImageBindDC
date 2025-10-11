@@ -32,6 +32,8 @@ class Trainer:
                  checkpoint_dir: str = 'output/checkpoints',
                  mismatch_rate: float = 0.0,
                  noise_level: float = 0.0,
+                 dropout_rate: float = 0.0,
+                 dropout_modality: str = None,
                  augment_transform: Optional[Callable] = None):
         """
         初始化 Trainer。
@@ -64,6 +66,8 @@ class Trainer:
         self.real_batch_size = real_batch_size
         self.noise_level = noise_level
         self.mismatch_rate = mismatch_rate
+        self.dropout_rate = dropout_rate
+        self.dropout_modality = dropout_modality
         
         self.best_val_acc = 0.0
         os.makedirs(self.checkpoint_dir, exist_ok=True)
@@ -162,6 +166,18 @@ class Trainer:
                     mismatch_indices = torch.randperm(batch_size)[:num_mismatch]
                     # 只调整音频模态，以实现百分比的错位
                     aud_real_batch_sorted[mismatch_indices] = torch.roll(aud_real_batch_sorted[mismatch_indices], shifts=1, dims=0)
+
+            # REBUTTAL: 模态dropout一部分
+            if self.dropout_rate > 0.0 and self.dropout_modality in ['audio', 'image']:
+                batch_size = aud_real_batch_sorted.size(0)
+                num_dropout = int(batch_size * self.dropout_rate)
+                if num_dropout > 0:
+                    dropout_indices = torch.randperm(batch_size)[:num_dropout]
+                    if self.dropout_modality == 'audio':
+                        aud_real_batch_sorted[dropout_indices] = 0
+                    elif self.dropout_modality == 'image':
+                        img_real_batch_sorted[dropout_indices] = 0
+
 
             # 3. 清零梯度
             self.optimizer.zero_grad()
