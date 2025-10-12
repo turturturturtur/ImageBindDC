@@ -84,7 +84,7 @@ class ClipClassifier_mlp(nn.Module):
 
         with torch.no_grad():
             # clip_model.encode_image 会返回 [N, 512] 的张量
-            features = self.clip_model.encode_image(image).to(torch.float32)
+            features = self.model.encode_image(image).to(torch.float32)
             
         # 如果需要embeddings就直接返回
         if mode == "embeddings":
@@ -135,7 +135,7 @@ class ClipClassifier_convnet(nn.Module):
 
         with torch.no_grad():
             # clip_model.encode_image 会返回 [N, 512] 的张量
-            features = self.clip_model.encode_image(image).to(torch.float32)
+            features = self.model.encode_image(image).to(torch.float32)
 
         # 如果需要embeddings就直接返回
         if mode == "embeddings":
