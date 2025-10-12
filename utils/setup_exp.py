@@ -46,9 +46,8 @@ def get_syn_data(dst_train: Dataset, dst_syn_container: Dataset, ipc: int, mode:
         
         selected_indices = sampler.sample(class_idx=c, num_samples=num_samples_to_get)
         
-        # (处理空类别或样本不足的情况，代码不变)
-        if not selected_indices or len(selected_indices) < num_samples_to_get:
-            # ... (这部分代码和之前一样)
+        # 只有空类跳过
+        if not selected_indices:
             continue
             
         # 3.2. 批量获取真实数据

@@ -3,11 +3,11 @@
 # Training parameters
 dataset: "VGG_subset"
 ipc: 10
-epochs: 30
+epochs: 10
 num_exp: 3
 img_aug: false
 loss: "cf_cos_loss_vision"
-batch_size: 32
+batch_size: 128
 
 lam_cgm: 10.0          # weight for cross-modal gap matching loss
 lam_icm: 10.0          # weight for implicit cross matching loss
