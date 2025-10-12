@@ -10,7 +10,7 @@ mkdir -p "$OUTPUT_DIR"
 mkdir -p "$LOG_DIR"
 
 # 要实验的 dataset、ipc、dropout rates 和 modality
-DATASETS=("AVE" "VGG_subset")
+DATASETS=("VGG_subset" "AVE")
 IPCS=(1 5 10)
 DROPOUT_RATES=(0.01 0.05 0.1 1)
 MODALITIES=("audio" "image")

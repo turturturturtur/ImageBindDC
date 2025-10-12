@@ -72,7 +72,7 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--exp_config", type=str, default="config/experiment/distillation.yaml")
-    parser.add_argument("--model_config", type=str, default="config/model/imagebind.yaml")
+    parser.add_argument("--model_config", type=str, default="config/model/imagebind_linear.yaml")
     parser.add_argument("--dropout_rate", type=float, default=0.0)
     parser.add_argument("--dropout_modality", type=str, default="audio")
     parser.add_argument("--seed", type=int, default=42)
