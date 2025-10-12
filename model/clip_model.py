@@ -80,11 +80,9 @@ class ClipClassifier_mlp(nn.Module):
         '''
         image = inputs["image"].to(self.device)
         image = self.normalize(image)
-
-
-        with torch.no_grad():
-            # clip_model.encode_image 会返回 [N, 512] 的张量
-            features = self.model.encode_image(image).to(torch.float32)
+        
+        # clip_model.encode_image 会返回 [N, 512] 的张量
+        features = self.model.encode_image(image).to(torch.float32)
             
         # 如果需要embeddings就直接返回
         if mode == "embeddings":
@@ -124,6 +122,7 @@ class ClipClassifier_convnet(nn.Module):
             mode='audio', # 使用 audio 模式以利用自适应池化
             num_classes=num_classes
         )
+        self.classifier_audio = nn.Linear(extra_params.get("input_dim"), extra_params.get("num_classes"))
 
     def forward(self, inputs, mode: Optional[str] = None):
         '''
@@ -132,10 +131,8 @@ class ClipClassifier_convnet(nn.Module):
         image = inputs["image"].to(self.device)
         image = self.normalize(image)
 
-
-        with torch.no_grad():
-            # clip_model.encode_image 会返回 [N, 512] 的张量
-            features = self.model.encode_image(image).to(torch.float32)
+        # clip_model.encode_image 会返回 [N, 512] 的张量
+        features = self.model.encode_image(image).to(torch.float32)
 
         # 如果需要embeddings就直接返回
         if mode == "embeddings":
