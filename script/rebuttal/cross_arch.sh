@@ -1,20 +1,22 @@
 #!/usr/bin/env bash
-set -euo pipefail
 
-# 基础目录 / 文件
+# 脚本出错时立即退出
+set -e
+
+# --- 基础配置 ---
+# 输出和日志目录
 OUTPUT_DIR="output/config"
 LOG_DIR="logs"
 
+# 如果目录不存在，则创建它们
 mkdir -p "$OUTPUT_DIR"
 mkdir -p "$LOG_DIR"
 
-# 数据集、ipc、GPU、models 列表
+# --- 实验参数 ---
+# 数据集、ipc、GPU 和 models 列表
 DATASETS=("AVE" "VGG_subset")
 IPCS=(1 5 10)
-CUDA_IDS=(0 1 2 3)
-num_gpus=${#CUDA_IDS[@]}
-
-# models 列表（按你给的）
+CUDA_IDS=(0 1 2 3) # 使用的 GPU 列表
 MODELS=(
   "clip_convnet.yaml"
   "clip_linear.yaml"
@@ -24,67 +26,108 @@ MODELS=(
   "imagebind_mlp.yaml"
 )
 
-echo "Start running pipeline.py experiments. GPUs: ${CUDA_IDS[*]}. Start time: $(date)"
+# 最大并发任务数，设置为 GPU 的数量
+MAX_JOBS=${#CUDA_IDS[@]}
 
+# --- 主逻辑 ---
+echo "实验执行脚本启动。"
+echo "可用 GPU: ${CUDA_IDS[*]}"
+echo "最大并发任务数: $MAX_JOBS"
+echo "开始时间: $(date)"
+echo "-----------------------------------------------------"
+
+# 这是一个独立的函数，负责准备并启动单个实验任务
+# 参数: 1:数据集 2:IPC 3:模型文件 4:GPU ID
+run_single_task() {
+  local dataset="$1"
+  local ipc="$2"
+  local model_file="$3"
+  local gpu_id="$4"
+
+  # 1. 根据模型名称选择正确的实验模板
+  local template_cfg
+  if [[ "$model_file" == clip_* ]]; then
+    template_cfg="config/experiment/distillation_clip.yaml"
+  else
+    template_cfg="config/experiment/distillation.yaml"
+  fi
+
+  # 2. 准备该任务专用的 YAML 配置文件
+  local model_base="${model_file%.yaml}"
+  local new_yaml="$OUTPUT_DIR/${dataset}_ipc${ipc}_${model_base}.yaml"
+
+  # 检查模板文件是否存在
+  if [ ! -f "$template_cfg" ]; then
+    echo "错误: 模板配置文件 '$template_cfg' 未找到。跳过此任务。" >&2
+    return
+  fi
+
+  # 拷贝模板并替换参数
+  cp "$template_cfg" "$new_yaml"
+  sed -i "s/^\s*dataset\s*:.*$/dataset: \"${dataset}\"/" "$new_yaml"
+  sed -i "s/^\s*ipc\s*:.*$/ipc: ${ipc}/" "$new_yaml"
+
+  # 3. 准备启动命令
+  local model_config_path="config/model/${model_file}"
+  local log_file="$LOG_DIR/${dataset}_ipc${ipc}_${model_base}.log"
+
+  # 检查模型配置文件是否存在
+  if [ ! -f "$model_config_path" ]; then
+    echo "错误: 模型配置文件 '$model_config_path' 未找到。跳过此任务。" >&2
+    return
+  fi
+
+  echo "准备启动任务: Dataset=${dataset}, IPC=${ipc}, Model=${model_base} on GPU=${gpu_id}"
+  echo "  --> 日志文件: ${log_file}"
+
+  # 4. 在后台启动 Python 任务
+  CUDA_VISIBLE_DEVICES=${gpu_id} \
+    python pipeline.py \
+      --exp_config "$new_yaml" \
+      --model_config "$model_config_path" \
+    > "$log_file" 2>&1 &
+}
+
+# --- 任务调度器 ---
+task_index=0
+# 通过三层循环遍历所有实验组合
 for DATASET in "${DATASETS[@]}"; do
   for IPC in "${IPCS[@]}"; do
-
-    task_idx=0
-
     for MODEL_FILE in "${MODELS[@]}"; do
 
-      # 根据 model 前缀选择使用的实验模板
-      if [[ "$MODEL_FILE" == clip_* ]]; then
-        TEMPLATE_CFG="config/experiment/distillation_clip.yaml"
-      else
-        TEMPLATE_CFG="config/experiment/distillation.yaml"
-      fi
+      # 检查当前后台任务数量是否已达到上限
+      # `jobs -p` 会列出所有后台任务的进程ID (PID)
+      # `wc -l` 会统计行数，即任务数量
+      while (( $(jobs -p | wc -l) >= MAX_JOBS )); do
+        echo "任务队列已满 (正在运行 $MAX_JOBS 个任务)，等待空闲 GPU..."
+        # `wait -n` 是关键：它会等待任何一个后台任务完成，然后继续
+        wait -n
+        sleep 1 # 短暂暂停，避免CPU空转
+      done
 
-      # 生成唯一的 yaml 名称，便于区分
-      MODEL_BASE="${MODEL_FILE%.yaml}"
-      NEW_YAML="$OUTPUT_DIR/${DATASET}_ipc${IPC}_${MODEL_BASE}.yaml"
+      # 使用取模运算为新任务分配一个 GPU
+      gpu_index=$((task_index % ${#CUDA_IDS[@]}))
+      gpu_id=${CUDA_IDS[$gpu_index]}
 
-      # 拷贝模板到新 yaml（覆盖）
-      cp "$TEMPLATE_CFG" "$NEW_YAML"
+      # 调用函数，在后台启动这个新任务
+      run_single_task "$DATASET" "$IPC" "$MODEL_FILE" "$gpu_id"
 
-      # 尝试替换 dataset: 和 ipc:，如果模板里没有则追加
-      if grep -qE '^\s*dataset\s*:' "$NEW_YAML"; then
-        sed -i.bak "s/^\s*dataset\s*:.*$/dataset: \"${DATASET}\"/" "$NEW_YAML"
-      else
-        echo -e "\n# added by run script\ndataset: \"${DATASET}\"" >> "$NEW_YAML"
-      fi
-
-      if grep -qE '^\s*ipc\s*:' "$NEW_YAML"; then
-        sed -i.bak "s/^\s*ipc\s*:.*$/ipc: ${IPC}/" "$NEW_YAML"
-      else
-        echo "ipc: ${IPC}" >> "$NEW_YAML"
-      fi
-
-      # 清理 sed 备份（mac/linux 兼容处理）
-      rm -f "$NEW_YAML.bak" "$NEW_YAML.bak-e" || true
-
-      echo "Prepared YAML: $NEW_YAML  (template: $(basename $TEMPLATE_CFG))"
-
-      # 分配 GPU（轮询）
-      gpu_idx=$(( task_idx % num_gpus ))
-      GPU="${CUDA_IDS[$gpu_idx]}"
-
-      LOG_FILE="$LOG_DIR/cross_arch_${DATASET}_ipc${IPC}_${MODEL_BASE}.log"
-
-      echo "  Launching: dataset=${DATASET}, ipc=${IPC}, model=${MODEL_FILE}, GPU=${GPU}"
-      CUDA_VISIBLE_DEVICES=${GPU} \
-        python pipeline.py \
-          --exp_config "$NEW_YAML" \
-          --model_config "$MODEL_CONFIG_PATH" \
-        > "$LOG_FILE" 2>&1 &
-
-      task_idx=$((task_idx + 1))
+      # 任务计数器加一
+      task_index=$((task_index + 1))
+      
+      # 短暂间隔，避免瞬间启动过多进程对系统造成冲击
+      sleep 2
     done
-
-    # 等待当前 dataset + ipc 下所有后台任务完成（防止跨组抢占 GPU）
-    wait
-    echo "Completed all models for dataset=${DATASET}, ipc=${IPC} at $(date)"
   done
 done
 
-echo "All tasks finished. Logs in: $LOG_DIR. End time: $(date)"
+# --- 收尾工作 ---
+echo "-----------------------------------------------------"
+echo "所有任务均已启动，正在等待最后运行的 ${MAX_JOBS} 个或更少的任务完成..."
+# 最后的 `wait` 会等待所有剩余的后台任务执行完毕
+wait
+
+echo "-----------------------------------------------------"
+echo "所有实验任务已全部完成！"
+echo "日志文件位于 '$LOG_DIR' 目录。"
+echo "结束时间: $(date)"
