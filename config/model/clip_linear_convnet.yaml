@@ -1,0 +1,6 @@
+# configs/clip.yaml
+name: clip_convnet
+
+params:
+  extra_params:
+    input_dim: 512
