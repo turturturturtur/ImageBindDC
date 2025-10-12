@@ -26,3 +26,6 @@ Thumbs.db
 node_modules/
 .env
 *.tmp
+*/__pycache__/
+*.pyc
+*.pyo
