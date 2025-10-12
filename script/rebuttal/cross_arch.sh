@@ -69,7 +69,7 @@ run_single_task() {
 
   # 3. 准备启动命令
   local model_config_path="config/model/${model_file}"
-  local log_file="$LOG_DIR/${dataset}_ipc${ipc}_${model_base}.log"
+  local log_file="cross_arch_$LOG_DIR/${dataset}_ipc${ipc}_${model_base}.log"
 
   # 检查模型配置文件是否存在
   if [ ! -f "$model_config_path" ]; then
