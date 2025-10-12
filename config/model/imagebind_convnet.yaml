@@ -1,5 +1,5 @@
-# configs/imagebind.yaml
-name: imagebind
+# configs/imagebind_linear.yaml
+name: imagebind_linear
 
 params:
   # 🔹 Vision 模态
@@ -22,3 +22,5 @@ params:
   # 
   extra_params:
     input_dim: 1024
+
+    

@@ -25,6 +25,7 @@ from .multimodal_preprocessors import (AudioPreprocessor,
 from .transformer import MultiheadAttention, SimpleTransformer
 from registry import MODEL
 import torch.nn.functional as F
+from .convnet import ConvNet
 
 
 ModalityType = SimpleNamespace(
@@ -528,11 +529,40 @@ def audio_padding(audio):
             audio = audio
     return audio
 
-@MODEL.register("imagebind")
-class ImageBindClassifer(ImageBindModel):
+def imagebind_huge(pretrained=False):
+    model = ImageBindModel(
+        vision_embed_dim=1280,
+        vision_num_blocks=32,
+        vision_num_heads=16,
+        text_embed_dim=1024,
+        text_num_blocks=24,
+        text_num_heads=16,
+        out_embed_dim=1024,
+        audio_drop_path=0.1,
+        imu_drop_path=0.7,
+        
+    )
+
+    if pretrained:
+        weight_path = "data/checkpoint/imagebind_huge.pth"
+        if not os.path.exists(weight_path):
+            print("Downloading imagebind weights to checkpoint/imagebind_huge.pth ...")
+            os.makedirs("data/checkpoint", exist_ok=True)   # <- 关键：确保目录存在
+            torch.hub.download_url_to_file(
+                "https://dl.fbaipublicfiles.com/imagebind/imagebind_huge.pth",
+                weight_path,
+                progress=True,
+            )
+
+        model.load_state_dict(torch.load(weight_path), strict=False)
+    return model
+
+
+@MODEL.register("imagebind_linear")
+class ImageBindClassifer_linear(ImageBindModel):
     def __init__(self,**kwargs):
         extra_params = kwargs.pop('extra_params', None)
-        super(ImageBindClassifer, self).__init__(**kwargs)
+        super(ImageBindClassifer_linear, self).__init__(**kwargs)
 
         # 定义权重文件的路径
         pretrained_path = "data/checkpoint/imagebind_huge.pth"
@@ -581,7 +611,7 @@ class ImageBindClassifer(ImageBindModel):
             ModalityType.VISION: image,
             ModalityType.AUDIO: audio,
         }
-        features = super(ImageBindClassifer, self).forward(inputs)
+        features = super(ImageBindClassifer_linear, self).forward(inputs)
         
         # 如果需要embeddings就直接返回
         if mode == "embeddings":
@@ -604,30 +634,184 @@ class ImageBindClassifer(ImageBindModel):
         return pred
 
 
-def imagebind_huge(pretrained=False):
-    model = ImageBindModel(
-        vision_embed_dim=1280,
-        vision_num_blocks=32,
-        vision_num_heads=16,
-        text_embed_dim=1024,
-        text_num_blocks=24,
-        text_num_heads=16,
-        out_embed_dim=1024,
-        audio_drop_path=0.1,
-        imu_drop_path=0.7,
-        
-    )
+@MODEL.register("imagebind_mlp")
+class ImageBindClassifer_mlp(ImageBindModel):
+    def __init__(self,**kwargs):
+        extra_params = kwargs.pop('extra_params', None)
+        super(ImageBindClassifer_mlp, self).__init__(**kwargs)
 
-    if pretrained:
-        weight_path = "data/checkpoint/imagebind_huge.pth"
-        if not os.path.exists(weight_path):
-            print("Downloading imagebind weights to checkpoint/imagebind_huge.pth ...")
-            os.makedirs("data/checkpoint", exist_ok=True)   # <- 关键：确保目录存在
+        # 定义权重文件的路径
+        pretrained_path = "data/checkpoint/imagebind_huge.pth"
+        
+        # 检查权重文件是否存在，如果不存在则自动下载
+        if not os.path.exists(pretrained_path):
+            print(f"ImageBind weights not found at '{pretrained_path}'. Downloading...")
+            
+            # 确保 checkpoint 目录存在
+            checkpoint_dir = os.path.dirname(pretrained_path)
+            os.makedirs(checkpoint_dir, exist_ok=True)
+            
+            # 从官方 URL 下载文件
             torch.hub.download_url_to_file(
                 "https://dl.fbaipublicfiles.com/imagebind/imagebind_huge.pth",
-                weight_path,
+                pretrained_path,
                 progress=True,
             )
+        
+        # 加载预训练权重到模型中
+        print(f"Loading pretrained ImageBind weights from: {pretrained_path}")
+        # 使用 strict=False 允许我们只加载父类 ImageBindModel 的权重，
+        # 而忽略我们自己新加的 classifier 层的权重（因为它们在 .pth 文件中不存在）。
+        self.load_state_dict(torch.load(pretrained_path, map_location='cpu'), strict=False)
+        print("Pretrained weights loaded successfully.")
 
-        model.load_state_dict(torch.load(weight_path), strict=False)
-    return model
+        input_dim = extra_params.get("input_dim")
+        num_classes = extra_params.get("num_classes")
+        hidden_dim = extra_params.get("hidden_dim", 512) # 从配置中获取隐藏层维度
+        dropout_p = extra_params.get("dropout_p", 0.5)   # 从配置中获取dropout率
+
+        self.classifier_audio = nn.Sequential(
+            nn.Linear(input_dim, hidden_dim),
+            nn.ReLU(inplace=True),
+            nn.Dropout(p=dropout_p),
+            nn.Linear(hidden_dim, num_classes)
+        )
+        self.classifier_image = nn.Sequential(
+            nn.Linear(input_dim, hidden_dim),
+            nn.ReLU(inplace=True),
+            nn.Dropout(p=dropout_p),
+            nn.Linear(hidden_dim, num_classes)
+        )
+
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    
+
+    def forward(self, inputs, mode: Optional[str] = None):
+        '''
+        直接输入dst_train形式的inputs,返回分类结果
+        '''
+        # 自动获取模型当前设备
+        device = next(self.parameters()).device
+        
+        audio = inputs["audio"].to(device)
+        image = inputs["image"].to(device)
+
+        # 填充audio
+        audio = audio_padding(audio)
+
+        inputs = {
+            ModalityType.VISION: image,
+            ModalityType.AUDIO: audio,
+        }
+        features = super(ImageBindClassifer_mlp, self).forward(inputs)
+        
+        # 如果需要embeddings就直接返回
+        if mode == "embeddings":
+            return features
+        
+        # 分解模态feature准备送入classifier
+        if ModalityType.VISION in features:
+            feature_image = features[ModalityType.VISION]
+            logits_image = self.classifier_image(feature_image)
+        if ModalityType.AUDIO in features:
+            feature_audio = features[ModalityType.AUDIO]
+            logits_audio = self.classifier_audio(feature_audio)
+        else:
+            raise ValueError("No valid modality found for classification.")
+
+        if mode == "logits":
+            return logits_image, logits_audio
+
+        pred = (F.softmax(logits_audio, dim=1) + F.softmax(logits_image, dim=1)) / 2
+        return pred
+
+
+
+@MODEL.register("imagebind_convnet")
+class ImageBindClassifer_convnet(ImageBindModel):
+    def __init__(self,**kwargs):
+        extra_params = kwargs.pop('extra_params', None)
+        super(ImageBindClassifer_convnet, self).__init__(**kwargs)
+
+        # 定义权重文件的路径
+        pretrained_path = "data/checkpoint/imagebind_huge.pth"
+        
+        # 检查权重文件是否存在，如果不存在则自动下载
+        if not os.path.exists(pretrained_path):
+            print(f"ImageBind weights not found at '{pretrained_path}'. Downloading...")
+            
+            # 确保 checkpoint 目录存在
+            checkpoint_dir = os.path.dirname(pretrained_path)
+            os.makedirs(checkpoint_dir, exist_ok=True)
+            
+            # 从官方 URL 下载文件
+            torch.hub.download_url_to_file(
+                "https://dl.fbaipublicfiles.com/imagebind/imagebind_huge.pth",
+                pretrained_path,
+                progress=True,
+            )
+        
+        # 加载预训练权重到模型中
+        print(f"Loading pretrained ImageBind weights from: {pretrained_path}")
+        # 使用 strict=False 允许我们只加载父类 ImageBindModel 的权重，
+        # 而忽略我们自己新加的 classifier 层的权重（因为它们在 .pth 文件中不存在）。
+        self.load_state_dict(torch.load(pretrained_path, map_location='cpu'), strict=False)
+        print("Pretrained weights loaded successfully.")
+
+        num_classes = extra_params.get("num_classes")
+        
+        # ConvNet 现在会自己处理最终的分类层，代码变得极其简洁！
+        self.classifier_image = ConvNet(channel=1, im_size=(32, 32), mode='vision', num_classes=num_classes)
+        self.classifier_audio = ConvNet(channel=1, im_size=(32, 32), mode='audio', num_classes=num_classes)
+
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    
+
+    def forward(self, inputs, mode: Optional[str] = None):
+        '''
+        直接输入dst_train形式的inputs,返回分类结果
+        '''
+        # 自动获取模型当前设备
+        device = next(self.parameters()).device
+        
+        audio = inputs["audio"].to(device)
+        image = inputs["image"].to(device)
+
+        # 填充audio
+        audio = audio_padding(audio)
+
+        inputs = {
+            ModalityType.VISION: image,
+            ModalityType.AUDIO: audio,
+        }
+        features = super(ImageBindClassifer_convnet, self).forward(inputs)
+        
+        # 如果需要embeddings就直接返回
+        if mode == "embeddings":
+            return features
+        
+        if ModalityType.VISION in features:
+            feature_image = features[ModalityType.VISION]
+            pseudo_image = feature_image.view(-1, 1, 32, 32)
+            
+            # --- 关键改动: 一步直接得到 logits ---
+            # 因为 ConvNet 的 forward 方法现在直接输出 logits
+            logits_image = self.classifier_image(pseudo_image)
+
+        if ModalityType.AUDIO in features:
+            feature_audio = features[ModalityType.AUDIO]
+            pseudo_audio = feature_audio.view(-1, 1, 32, 32)
+
+            # --- 关键改动: 一步直接得到 logits ---
+            logits_audio = self.classifier_audio(pseudo_audio)
+
+        if 'logits_image' not in locals() and 'logits_audio' not in locals():
+             raise ValueError("No valid modality found for classification.")
+
+        if mode == "logits":
+            return logits_image, logits_audio
+
+        pred = (F.softmax(logits_audio, dim=1) + F.softmax(logits_image, dim=1)) / 2
+        return pred
+
+

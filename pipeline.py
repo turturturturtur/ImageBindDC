@@ -69,7 +69,7 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--exp_config", type=str, default="config/experiment/distillation.yaml")
-    parser.add_argument("--model_config", type=str, default="config/model/imagebind.yaml")
+    parser.add_argument("--model_config", type=str, default="config/model/clip.yaml")
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
     main(args)

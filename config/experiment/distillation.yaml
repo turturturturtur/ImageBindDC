@@ -2,7 +2,7 @@
 
 # Training parameters
 dataset: "VGG_subset"
-ipc: 1
+ipc: 10
 epochs: 30
 num_exp: 3
 img_aug: false

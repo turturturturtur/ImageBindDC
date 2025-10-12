@@ -20,6 +20,7 @@ class ClipClassifier(nn.Module):
         self.model, _ = clip.load("ViT-B/32", device=self.device)
 
         self.classifier_image = nn.Linear(extra_params.get("input_dim"), extra_params.get("num_classes"))
+        self.classifier_audio = nn.Linear(extra_params.get("input_dim"), extra_params.get("num_classes"))
 
     def forward(self, inputs, mode: Optional[str] = None):
         '''
