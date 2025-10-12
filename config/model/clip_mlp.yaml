@@ -1,0 +1,8 @@
+# configs/clip.yaml
+name: clip_mlp
+
+params:
+  extra_params:
+    input_dim: 512
+    hidden_dim: 512
+    dropout_p: 0.1

@@ -1,5 +1,5 @@
-# configs/imagebind_linear.yaml
-name: imagebind_linear
+# configs/imagebind_convnet.yaml
+name: imagebind_convnet
 
 params:
   # 🔹 Vision 模态

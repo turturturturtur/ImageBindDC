@@ -1,5 +1,5 @@
-# configs/imagebind_linear.yaml
-name: imagebind_linear
+# configs/imagebind_mlp.yaml
+name: imagebind_mlp
 
 params:
   # 🔹 Vision 模态
@@ -24,4 +24,3 @@ params:
     input_dim: 1024
     hidden_dim: 512
     dropout_p: 0.1
-    
