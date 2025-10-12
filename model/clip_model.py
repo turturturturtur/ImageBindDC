@@ -18,7 +18,7 @@ class ClipClassifier_linear(nn.Module):
         self.CLIP_STD = [0.26862954, 0.26130258, 0.27577711]
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
 
-        self.model, _ = clip.load("ViT-B/32", device=self.device)
+        self.model, _ = clip.load("ViT-B/32", device=self.device, download_root="data/checkpoint")
 
         self.classifier_image = nn.Linear(extra_params.get("input_dim"), extra_params.get("num_classes"))
         self.classifier_audio = nn.Linear(extra_params.get("input_dim"), extra_params.get("num_classes"))
@@ -59,7 +59,7 @@ class ClipClassifier_mlp(nn.Module):
         )
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
 
-        self.model, _ = clip.load("ViT-B/32", device=self.device)
+        self.model, _ = clip.load("ViT-B/32", device=self.device, download_root="data/checkpoint")
 
         input_dim = extra_params.get("input_dim", 512) 
         num_classes = extra_params.get("num_classes")
@@ -111,7 +111,7 @@ class ClipClassifier_convnet(nn.Module):
         )
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
 
-        self.model, _ = clip.load("ViT-B/32", device=self.device)
+        self.model, _ = clip.load("ViT-B/32", device=self.device, download_root="data/checkpoint")
 
         num_classes = extra_params.get("num_classes")
         pseudo_im_size = (16, 32)
